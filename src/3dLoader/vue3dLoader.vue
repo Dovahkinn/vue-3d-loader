@@ -457,10 +457,18 @@ function pick(x: number, y: number) {
   const rect = (containerElement.value as HTMLElement).getBoundingClientRect();
   x -= rect.left;
   y -= rect.top;
-  mouse.x = (x / size.value.width) * 2 - 1;
-  mouse.y = -(y / size.value.height) * 2 + 1;
+  // console.log('pick size: ', size)
+
+  // ! 外部设置 scale 的情况下， 以下计算不准确
+  // mouse.x = (x / size.value.width) * 2 - 1;
+  // mouse.y = -(y / size.value.height) * 2 + 1;
+
+  mouse.x = (x / rect.width) * 2 - 1;
+  mouse.y = -(y / rect.height) * 2 + 1;
+
   raycaster.setFromCamera(mouse, camera);
   const intersects = raycaster.intersectObject(obj, props.intersectRecursive);
+  // console.log('pick: ', x, y, rect, mouse, props.intersectRecursive, obj, intersects)
   return (intersects && intersects.length) > 0 ? intersects[0] : null;
 }
 function update() {
