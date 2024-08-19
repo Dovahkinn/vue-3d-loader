@@ -2,8 +2,8 @@
   "name": "vue-3d-loader",
   "private": false,
   "version": "2.2.4",
-  "main": "dist/vue-3d-loader.cjs.js",
-  "module": "dist/vue-3d-loader.esm.js",
+  "main": "./src/index.ts",
+  "module": "/src/index.ts",
   "types": "dist/types/index.d.ts",
   "scripts": {
     "dev": "vite",

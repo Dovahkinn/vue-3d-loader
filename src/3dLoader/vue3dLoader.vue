@@ -30,7 +30,8 @@ import {
   Light,
   AxesHelper,
   GridHelper,
-  Group
+  Group,
+  Box3,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import Stats from "three/examples/jsm/libs/stats.module";
@@ -56,7 +57,7 @@ export interface controlsValue {
   max: number;
 }
 
-type plyMaterial = 'MeshBasicMaterial' | 'MeshStandardMaterial';
+type plyMaterial = "MeshBasicMaterial" | "MeshStandardMaterial";
 type encode = "linear" | "sRGB";
 interface Props {
   filePath: string | string[];
@@ -97,9 +98,11 @@ interface Props {
   enableAxesHelper?: boolean;
   axesHelperSize?: number;
   enableGridHelper?: boolean;
-  minDistance?: number; 
+  minDistance?: number;
   maxDistance?: number;
   pointLightFollowCamera?: boolean;
+  enableScaleCalculate?: boolean;
+  targetSize?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -146,12 +149,14 @@ const props = withDefaults(defineProps<Props>(), {
   intersectRecursive: false,
   verticalCtrl: false,
   horizontalCtrl: false,
-  plyMaterial: 'MeshStandardMaterial',
+  plyMaterial: "MeshStandardMaterial",
   enableAxesHelper: false,
   axesHelperSize: 100,
   enableGridHelper: false,
   minDistance: 0,
-  maxDistance: Infinity
+  maxDistance: Infinity,
+  enableScaleCalculate: false,
+  targetSize: 2.5,
 });
 
 // Non responsive variable
@@ -199,13 +204,16 @@ watch([() => props.width, () => props.height], () => {
   };
 });
 
-watch([
-  () => props.enableAxesHelper,
-  () => props.axesHelperSize,
-  () => props.enableGridHelper
-], () => {
-  setAxesAndGridHelper();
-});
+watch(
+  [
+    () => props.enableAxesHelper,
+    () => props.axesHelperSize,
+    () => props.enableGridHelper,
+  ],
+  () => {
+    setAxesAndGridHelper();
+  }
+);
 
 watch([() => props.minDistance, () => props.maxDistance], () => {
   setVerticalHorizontalControls();
@@ -340,7 +348,7 @@ function init() {
     showFps,
     enableDamping,
     dampingFactor,
-    labels
+    labels,
   } = props;
   if (filePath && typeof filePath === "object") {
     isMultipleModels.value = true;
@@ -527,6 +535,7 @@ function updateCamera(isResize?: boolean) {
   if (!cameraLookAt || !cameraUp) {
     if (!object) return;
     const distance = getSize(object).length();
+    console.log("update camera: ", object);
     camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z);
     if (cameraRotation) {
       camera.rotation.set(cameraRotation.x, cameraRotation.y, cameraRotation.z);
@@ -639,7 +648,7 @@ function load(fileIndex?: number) {
     mtlPath,
     enableDraco,
     dracoDir,
-    plyMaterial
+    plyMaterial,
   } = props;
   if (!filePath) return;
   const index = fileIndex || loaderIndex.value;
@@ -689,12 +698,24 @@ function load(fileIndex?: number) {
   }
 }
 function loadFilePath(filePath: string, getObject: any, index: number) {
-  const { textureImage, parallelLoad } = props;
+  const { textureImage, parallelLoad, enableScaleCalculate, targetSize, } = props;
   loader.load(
     filePath,
     (...args: any) => {
       const obj = getObject(...args);
       object = obj;
+      // 设置模型缩放比例
+      if (enableScaleCalculate) {
+        object.updateMatrixWorld();
+        const box = new Box3().setFromObject(object);
+        const size = box.getSize(new Vector3());
+        // 计算缩放比例
+        const maxSize = Math.max(size.x, size.y, size.z);
+        const scale = targetSize / (maxSize > 1 ? maxSize : 0.5);
+        object.scale.set(scale, scale, scale);
+        console.log('enableScaleCalculate: ', scale)
+      }
+
       addObject(object, filePath);
       // set texture
       if (textureImage) {
@@ -704,7 +725,7 @@ function loadFilePath(filePath: string, getObject: any, index: number) {
           addTexture(object, _texture);
         }
       }
-      emit("load", scene);
+      emit("load", scene, object);
     },
     (event: ProgressEvent) => {
       if (!parallelLoad) {
@@ -776,9 +797,9 @@ function animate() {
   render();
 }
 function render() {
-  const { pointLightFollowCamera } = props
+  const { pointLightFollowCamera } = props;
   if (pointLightFollowCamera) {
-    setLightFollowCamera()
+    setLightFollowCamera();
   }
   renderer.render(scene, camera);
 }
@@ -900,16 +921,18 @@ function clearSprite() {
     if (item) {
       // If have only one model the Sprite in Group
       if (item instanceof Group && item.children) {
-        scene.children[i].children = item.children.map((_item: any) => {
-          if (_item instanceof Sprite) {
-            return null;
-          }
-          return _item;
-        }).filter((item: any) => item);
+        scene.children[i].children = item.children
+          .map((_item: any) => {
+            if (_item instanceof Sprite) {
+              return null;
+            }
+            return _item;
+          })
+          .filter((item: any) => item);
       }
       // If have multiple models the Sprite in children
       if (item instanceof Sprite) {
-        scene.remove(item)
+        scene.remove(item);
       }
     }
   }
@@ -1070,7 +1093,7 @@ function setVerticalHorizontalControls() {
   }
 }
 // set axes and grid helper
-function setAxesAndGridHelper () {
+function setAxesAndGridHelper() {
   const { enableAxesHelper, enableGridHelper, axesHelperSize } = props;
   if (enableAxesHelper) {
     // add axes
@@ -1098,16 +1121,16 @@ function setLightFollowCamera() {
   const vector = camera.position.clone();
   scene.children.forEach((item: any) => {
     if (item instanceof PointLight) {
-      item.position.set(vector.x,vector.y,vector.z);
+      item.position.set(vector.x, vector.y, vector.z);
     }
-  })
+  });
 }
 
 // 导出变量
 defineExpose({
   camera,
   scene,
-})
+});
 </script>
 <style scoped>
 .viewer-container {
